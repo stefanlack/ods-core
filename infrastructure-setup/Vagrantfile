@@ -6,8 +6,10 @@ Vagrant.configure(2) do |config|
 
   # Fuer vagrant script Ausgaben
   ui = Vagrant::UI::Colored.new
-  default_mem = 2560
-  default_cpu = 1
+
+  default_mem = 8192
+  default_cpu = 2
+  default_box = 'bento/centos-7.5'
 
   # The most common vagranturation options are documented and commented below.
   # For a complete reference, please see the online documentation at
@@ -15,7 +17,10 @@ Vagrant.configure(2) do |config|
   # VirtualBox Configuration
 
   machines = {
-               :atlassian     => {:ip => '192.168.56.31', :box => 'bento/centos-7.5', :mem => '8192', :cpu => 2 }
+               :atlassian     => {:ip => '192.168.56.31'},
+               :openshift     => {:ip => '192.168.56.101'},
+               :atlcon        => {:ip => '192.168.56.110', :mem => '512', :cpu => 1},
+               :idmanager     => {:ip => '192.168.56.32', :mem => '2048'},
              }
 
   if Vagrant.has_plugin?("vagrant-cachier")
@@ -27,18 +32,15 @@ Vagrant.configure(2) do |config|
     ui.warn('       Using it can speed up your machine provisioning.')
   end
 
-  # Atlassian and rundeck Host
+  # Provision the VM's
   machines.each do |machine_name, machine_details|
    config.vm.define machine_name do |machine_config|
      machine_ip = machine_details[:ip]
      ui.info("Handling vm with hostname [#{machine_name.to_s}] and IP [#{machine_ip}]")
      machine_config.vm.box_check_update = false
-     machine_config.vm.box = machine_details[:box]
+     machine_config.vm.box = machine_details[:box] || default_box
      machine_config.vm.network :private_network, ip: machine_ip
      machine_config.vm.hostname = machine_name.to_s
-
-     #set base directory for ods projects
-     machine_config.vm.synced_folder "../..", "/ods"
 
      machine_config.vm.provider :virtualbox do |vb|
        reserved_mem = machine_details[:mem] || default_mem
@@ -51,59 +53,28 @@ Vagrant.configure(2) do |config|
      end #vb
    end # machine_config
   end # machines
-		   
-  # openshift
-  config.vm.define "openshift", primary:true, autostart: true do |vm_config|
-    vm_config.vm.box = "bento/centos-7.5"
-    vm_config.vm.box_check_update = false
-    vm_config.vm.hostname = "openshift"
+
+  # machine specific folder and provisioning stuff
+  config.vm.define "atlassian" do |vm_config|
+    vm_config.vm.synced_folder "../..", "/ods"
+  end 
+
+  config.vm.define "openshift" do |vm_config|
     vm_config.vm.synced_folder ".", "/vagrant", mount_options: ["dmode=775,fmode=664"]
     vm_config.vm.synced_folder "./.vagrant", "/vagrant/.vagrant", mount_options: ["dmode=700,fmode=600"]
     vm_config.vm.synced_folder "../..", "/ods"
-    vm_config.vm.network :private_network, ip: "192.168.56.101"
-    vm_config.vm.provider :virtualbox do |vb|
-      vb.name = "openshift"
-      vb.customize ["modifyvm", :id, "--groups", "/opendevstack"]
-      vb.customize ["modifyvm", :id, "--memory", 8192]
-      vb.customize ["modifyvm", :id, "--cpus", 2]
-      vb.gui = false
-    end
     vm_config.vm.provision "shell", path: "scripts/ansible.sh"
   end
 
-  # Ansible controller
-  config.vm.define "atlcon", primary:true, autostart: true do |vm_config|
-    vm_config.vm.box = "bento/centos-7.5"
-    vm_config.vm.box_check_update = false
-    vm_config.vm.hostname = "atlcon"
+  config.vm.define "atlcon" do |vm_config|
     vm_config.vm.synced_folder ".", "/vagrant", mount_options: ["dmode=775,fmode=664"]
     vm_config.vm.synced_folder "./.vagrant", "/vagrant/.vagrant", mount_options: ["dmode=700,fmode=600"]
-    vm_config.vm.network :private_network, ip: "192.168.56.110"
-    vm_config.vm.provider :virtualbox do |vb|
-      vb.name = "atlcon"
-      vb.customize ["modifyvm", :id, "--groups", "/opendevstack"]
-      vb.customize ["modifyvm", :id, "--memory", 512]
-      vb.customize ["modifyvm", :id, "--cpus", 1]
-      vb.gui = false
-    end
     vm_config.vm.provision "shell", path: "scripts/ansible.sh"
   end
 
-  # Identity Manager
   config.vm.define "idmanager" do |vm_config|
-    vm_config.vm.box = "bento/centos-7.5"
-    vm_config.vm.box_check_update = false
-    vm_config.vm.hostname = "idmanager"
     vm_config.vm.synced_folder ".", "/vagrant", mount_options: ["dmode=775,fmode=664"]
     vm_config.vm.synced_folder "./.vagrant", "/vagrant/.vagrant", mount_options: ["dmode=700,fmode=600"]
-    vm_config.vm.network :private_network, ip: "192.168.56.32"
-    vm_config.vm.provider :virtualbox do |vb|
-      vb.name = "idmanager"
-      vb.customize ["modifyvm", :id, "--groups", "/opendevstack"]
-      vb.customize ["modifyvm", :id, "--memory", 2048]
-      vb.customize ["modifyvm", :id, "--cpus", 2]
-      vb.gui = false
-    end
     vm_config.vm.provision "shell", path: "scripts/keycloak.sh"
   end
 
